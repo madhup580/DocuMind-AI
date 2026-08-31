@@ -1,6 +1,7 @@
 from utils.embeddings import create_embeddings
 from utils.vector_store import search_vector_store
-from transformers import pipeline
+import os
+import requests
 
 
 # --------------------------------------------------
@@ -31,26 +32,7 @@ def retrieve_relevant_chunks(query, chunks, index, top_k=5):
 
 
 # --------------------------------------------------
-# 2. Load local LLM only when needed
-# --------------------------------------------------
-
-generator = None
-
-
-def get_generator():
-    global generator
-
-    if generator is None:
-        generator = pipeline(
-            "text-generation",
-            model="HuggingFaceTB/SmolLM2-135M-Instruct"
-        )
-
-    return generator
-
-
-# --------------------------------------------------
-# 3. Generate answer
+# 2. Generate answer using Hugging Face
 # --------------------------------------------------
 
 def generate_answer(query, relevant_chunks):
@@ -67,8 +49,7 @@ def generate_answer(query, relevant_chunks):
         for chunk in relevant_chunks
     )
 
-    prompt = f"""<|im_start|>system
-You answer questions about documents.
+    prompt = f"""You answer questions about documents.
 
 Use ONLY the document context provided below.
 
@@ -78,11 +59,9 @@ Rules:
 - Do not explain your reasoning.
 - Do not invent information.
 - Give a clear and concise answer.
-- If the answer is not present in the document context, say exactly:
+- If the answer is not present in the document context, say:
 I couldn't find that information in the uploaded document.
-<|im_end|>
 
-<|im_start|>user
 DOCUMENT CONTEXT:
 
 {context}
@@ -90,18 +69,45 @@ DOCUMENT CONTEXT:
 QUESTION:
 
 {query}
-<|im_end|>
 
-<|im_start|>assistant
+ANSWER:
 """
 
-    result = get_generator()(
-        prompt,
-        max_new_tokens=100,
-        do_sample=False,
-        return_full_text=False
+    token = os.environ.get("HF_TOKEN")
+
+    if not token:
+        return "Hugging Face token is not configured."
+
+    API_URL = "https://router.huggingface.co/hf-inference/models/HuggingFaceTB/SmolLM2-135M-Instruct"
+
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+
+    payload = {
+        "inputs": prompt,
+        "parameters": {
+            "max_new_tokens": 100,
+            "return_full_text": False
+        }
+    }
+
+    response = requests.post(
+        API_URL,
+        headers=headers,
+        json=payload,
+        timeout=120
     )
 
-    answer = result[0]["generated_text"].strip()
+    if response.status_code != 200:
+        return f"Model request failed: {response.text}"
 
-    return answer
+    result = response.json()
+
+    if isinstance(result, list) and len(result) > 0:
+        return result[0].get(
+            "generated_text",
+            "I couldn't generate an answer."
+        ).strip()
+
+    return "I couldn't generate an answer."
