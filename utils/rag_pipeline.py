@@ -1,8 +1,6 @@
 from utils.embeddings import create_embeddings
 from utils.vector_store import search_vector_store
-
-import os
-import requests
+from transformers import pipeline
 
 
 # --------------------------------------------------
@@ -33,7 +31,17 @@ def retrieve_relevant_chunks(query, chunks, index, top_k=5):
 
 
 # --------------------------------------------------
-# 2. Generate answer using Hugging Face API
+# 2. Load local LLM
+# --------------------------------------------------
+
+generator = pipeline(
+    "text-generation",
+    model="HuggingFaceTB/SmolLM2-135M-Instruct"
+)
+
+
+# --------------------------------------------------
+# 3. Generate answer
 # --------------------------------------------------
 
 def generate_answer(query, relevant_chunks):
@@ -50,7 +58,8 @@ def generate_answer(query, relevant_chunks):
         for chunk in relevant_chunks
     )
 
-    prompt = f"""You answer questions about documents.
+    prompt = f"""<|im_start|>system
+You answer questions about documents.
 
 Use ONLY the document context provided below.
 
@@ -62,7 +71,9 @@ Rules:
 - Give a clear and concise answer.
 - If the answer is not present in the document context, say exactly:
 I couldn't find that information in the uploaded document.
+<|im_end|>
 
+<|im_start|>user
 DOCUMENT CONTEXT:
 
 {context}
@@ -70,59 +81,18 @@ DOCUMENT CONTEXT:
 QUESTION:
 
 {query}
+<|im_end|>
+
+<|im_start|>assistant
 """
 
-    # Get Hugging Face API token
-    hf_token = os.getenv("HF_TOKEN")
+    result = generator(
+        prompt,
+        max_new_tokens=100,
+        do_sample=False,
+        return_full_text=False
+    )
 
-    if not hf_token:
-        return "Hugging Face API token is not configured."
+    answer = result[0]["generated_text"].strip()
 
-    # Hugging Face hosted model
-    model = "Qwen/Qwen2.5-0.5B-Instruct"
-
-    url = "https://router.huggingface.co/v1/chat/completions"
-
-    headers = {
-        "Authorization": f"Bearer {hf_token}",
-        "Content-Type": "application/json"
-    }
-
-    payload = {
-        "model": model,
-        "messages": [
-            {
-                "role": "system",
-                "content": "Answer questions using only the provided document context."
-            },
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ],
-        "max_tokens": 100,
-        "temperature": 0.1
-    }
-
-    try:
-
-        response = requests.post(
-            url,
-            headers=headers,
-            json=payload,
-            timeout=60
-        )
-
-        response.raise_for_status()
-
-        result = response.json()
-
-        answer = result["choices"][0]["message"]["content"].strip()
-
-        return answer
-
-    except Exception as e:
-
-        print("Hugging Face API error:", e)
-
-        return "Unable to generate an answer right now."
+    return answer
