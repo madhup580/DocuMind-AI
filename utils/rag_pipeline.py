@@ -36,9 +36,8 @@ def retrieve_relevant_chunks(query, chunks, index, top_k=5):
 
 generator = pipeline(
     "text-generation",
-    model="Qwen/Qwen2.5-0.5B-Instruct"
+    model="HuggingFaceTB/SmolLM2-135M-Instruct"
 )
-
 
 # --------------------------------------------------
 # 3. Generate answer
