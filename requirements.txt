@@ -3,6 +3,5 @@ python-dotenv
 pypdf
 faiss-cpu
 sentence-transformers
-transformers
-torch
+requests
 gunicorn
