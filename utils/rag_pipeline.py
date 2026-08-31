@@ -31,13 +31,23 @@ def retrieve_relevant_chunks(query, chunks, index, top_k=5):
 
 
 # --------------------------------------------------
-# 2. Load local LLM
+# 2. Load local LLM only when needed
 # --------------------------------------------------
 
-generator = pipeline(
-    "text-generation",
-    model="HuggingFaceTB/SmolLM2-135M-Instruct"
-)
+generator = None
+
+
+def get_generator():
+    global generator
+
+    if generator is None:
+        generator = pipeline(
+            "text-generation",
+            model="HuggingFaceTB/SmolLM2-135M-Instruct"
+        )
+
+    return generator
+
 
 # --------------------------------------------------
 # 3. Generate answer
@@ -85,7 +95,7 @@ QUESTION:
 <|im_start|>assistant
 """
 
-    result = generator(
+    result = get_generator()(
         prompt,
         max_new_tokens=100,
         do_sample=False,
