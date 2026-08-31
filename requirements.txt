@@ -1,7 +1,10 @@
 flask
 python-dotenv
 pypdf
+langchain
+langchain-community
+langchain-openai
 faiss-cpu
 sentence-transformers
-requests
-gunicorn
+transformers
+torch
